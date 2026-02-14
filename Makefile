@@ -1,21 +1,23 @@
-.PHONY: help start stop restart logs clean install-triggers remove-triggers test verify-clickhouse
+.PHONY: help start stop restart logs clean register-connectors connector-status delete-connectors test verify-clickhouse health
 
 help:
 	@echo "Neo4j to ClickHouse CDC - Available Commands"
 	@echo "=============================================="
-	@echo "make start              - Start all services"
-	@echo "make stop               - Stop all services"
-	@echo "make restart            - Restart all services"
-	@echo "make logs               - View all logs"
-	@echo "make logs-cdc           - View CDC bridge logs"
-	@echo "make logs-neo4j         - View Neo4j logs"
-	@echo "make logs-clickhouse    - View ClickHouse logs"
-	@echo "make clean              - Stop and remove all containers and volumes"
-	@echo "make install-triggers   - Install Neo4j CDC triggers"
-	@echo "make remove-triggers    - Remove Neo4j CDC triggers"
-	@echo "make test               - Run test scenarios"
-	@echo "make verify-clickhouse  - Verify data in ClickHouse"
-	@echo "make health             - Check service health"
+	@echo "make start                - Start all services"
+	@echo "make stop                 - Stop all services"
+	@echo "make restart              - Restart all services"
+	@echo "make logs                 - View all logs"
+	@echo "make logs-connect         - View Kafka Connect logs"
+	@echo "make logs-neo4j           - View Neo4j logs"
+	@echo "make logs-clickhouse      - View ClickHouse logs"
+	@echo "make logs-kafka           - View Kafka logs"
+	@echo "make clean                - Stop and remove all containers and volumes"
+	@echo "make register-connectors  - Register Neo4j CDC source connectors"
+	@echo "make connector-status     - Check connector status"
+	@echo "make delete-connectors    - Delete all connectors"
+	@echo "make test                 - Run test scenarios (containerized)"
+	@echo "make verify-clickhouse    - Verify data in ClickHouse"
+	@echo "make health               - Check service health"
 
 start:
 	docker-compose up -d
@@ -32,8 +34,8 @@ restart:
 logs:
 	docker-compose logs -f
 
-logs-cdc:
-	docker-compose logs -f cdc-bridge
+logs-connect:
+	docker-compose logs -f kafka-connect
 
 logs-neo4j:
 	docker-compose logs -f neo4j
@@ -48,32 +50,44 @@ clean:
 	docker-compose down -v
 	@echo "All containers and volumes removed"
 
-install-triggers:
-	@echo "Installing Neo4j CDC triggers..."
-	docker exec -i neo4j-cdc-neo4j cypher-shell -u neo4j -p password123 -d system < neo4j/install-triggers.cypher
-	@echo "Triggers installed successfully"
+register-connectors:
+	@echo "Registering Neo4j CDC source connectors..."
+	docker-compose up register-connectors
+	@echo "Connectors registered"
 
-remove-triggers:
-	@echo "Removing Neo4j CDC triggers..."
-	docker exec -i neo4j-cdc-neo4j cypher-shell -u neo4j -p password123 < neo4j/remove-triggers.cypher
-	@echo "Triggers removed successfully"
+connector-status:
+	@echo "Checking connector status..."
+	@curl -s http://localhost:8083/connectors/neo4j-cdc-nodes-source/status | python3 -m json.tool || echo "Nodes connector not found"
+	@echo ""
+	@curl -s http://localhost:8083/connectors/neo4j-cdc-relationships-source/status | python3 -m json.tool || echo "Relationships connector not found"
+
+delete-connectors:
+	@echo "Deleting connectors..."
+	@curl -s -X DELETE http://localhost:8083/connectors/neo4j-cdc-nodes-source || echo "Nodes connector not found"
+	@curl -s -X DELETE http://localhost:8083/connectors/neo4j-cdc-relationships-source || echo "Relationships connector not found"
+	@echo ""
+	@echo "Connectors deleted"
 
 test:
 	@echo "Running test scenarios..."
-	cd test-scenarios && python run_tests.py
+	docker-compose run --rm test-runner
 
 verify-clickhouse:
 	@echo "Querying ClickHouse CDC data..."
-	docker exec -it neo4j-cdc-clickhouse clickhouse-client --query "SELECT event_type, count() as total FROM cdc.nodes_cdc GROUP BY event_type"
-	docker exec -it neo4j-cdc-clickhouse clickhouse-client --query "SELECT event_type, count() as total FROM cdc.relationships_cdc GROUP BY event_type"
+	docker exec neo4j-cdc-clickhouse clickhouse-client --query "SELECT event_type, count() as total FROM cdc.nodes_cdc GROUP BY event_type"
+	docker exec neo4j-cdc-clickhouse clickhouse-client --query "SELECT event_type, count() as total FROM cdc.relationships_cdc GROUP BY event_type"
 
 health:
 	@echo "Checking service health..."
-	@echo "\nDocker services:"
+	@echo ""
+	@echo "Docker services:"
 	@docker-compose ps
-	@echo "\nCDC Bridge:"
-	@curl -s http://localhost:8000/health | python -m json.tool || echo "CDC Bridge not responding"
-	@echo "\nNeo4j:"
+	@echo ""
+	@echo "Kafka Connect:"
+	@curl -s http://localhost:8083/connectors | python3 -m json.tool || echo "Kafka Connect not responding"
+	@echo ""
+	@echo "Neo4j:"
 	@docker exec neo4j-cdc-neo4j cypher-shell -u neo4j -p password123 "RETURN 'Neo4j is healthy' as status" || echo "Neo4j not responding"
-	@echo "\nClickHouse:"
+	@echo ""
+	@echo "ClickHouse:"
 	@docker exec neo4j-cdc-clickhouse clickhouse-client --query "SELECT 'ClickHouse is healthy' as status" || echo "ClickHouse not responding"

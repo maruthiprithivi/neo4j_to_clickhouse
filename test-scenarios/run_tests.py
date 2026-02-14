@@ -158,7 +158,7 @@ def main():
     ])
     
     if not test_files:
-        print("\n✗ No test scenario files found!")
+        print("\n[FAIL] No test scenario files found!")
         sys.exit(1)
     
     print(f"\nFound {len(test_files)} test scenarios")
@@ -168,11 +168,11 @@ def main():
         run_cypher_file(neo4j_driver, test_file)
         # Wait for CDC events to propagate
         print("  Waiting for CDC events to propagate...")
-        time.sleep(3)
+        time.sleep(5)
     
     # Wait a bit more for all events to be processed
     print("\nWaiting for final CDC events to propagate...")
-    time.sleep(5)
+    time.sleep(10)
     
     # Verify data in ClickHouse
     verify_clickhouse_data(ch_client)

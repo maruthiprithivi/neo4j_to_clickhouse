@@ -32,8 +32,8 @@ Production-ready Change Data Capture (CDC) from Neo4j to ClickHouse using Kafka 
 
 ```bash
 # 1. Clone the repository
-git clone <repo-url>
-cd neo4j-clickhouse-cdc_final
+git clone git@github.com:maruthiprithivi/neo4j_to_clickhouse.git
+cd neo4j_to_clickhouse
 
 # 2. Set up environment
 cp .env.example .env
@@ -173,6 +173,7 @@ docker-compose logs -f
 ```
 
 **Expected output**:
+
 ```
 NAME                STATUS              PORTS
 neo4j               Up 30 seconds       0.0.0.0:7474->7474/tcp, 0.0.0.0:7687->7687/tcp
@@ -216,6 +217,7 @@ CALL apoc.trigger.list();
 ```
 
 You should see 6 triggers:
+
 - `cdc_node_created`
 - `cdc_node_updated`
 - `cdc_node_deleted`
@@ -303,6 +305,7 @@ docker exec -i clickhouse clickhouse-client --multiquery < initial-load/scripts/
 ```
 
 This will:
+
 - Merge table parts
 - Apply deduplication
 - Validate data consistency
@@ -381,6 +384,7 @@ python3 run_tests.py
 ```
 
 **Tests include**:
+
 1. Node INSERT
 2. Node UPDATE
 3. Node DELETE
@@ -461,11 +465,11 @@ docker-compose logs -f neo4j
 
 ### Scaling Recommendations
 
-| Dataset Size | Neo4j | ClickHouse | Kafka | CDC Bridge |
-|--------------|-------|------------|-------|------------|
-| < 10M records | 4 vCPU, 16GB | 8 vCPU, 32GB | 2 vCPU, 4GB | 2 vCPU, 4GB |
-| 10M - 100M | 8 vCPU, 32GB | 16 vCPU, 64GB | 4 vCPU, 8GB | 4 vCPU, 8GB |
-| > 100M | 16 vCPU, 64GB | 32 vCPU, 128GB | 8 vCPU, 16GB | 8 vCPU, 16GB |
+| Dataset Size  | Neo4j         | ClickHouse     | Kafka        | CDC Bridge   |
+| ------------- | ------------- | -------------- | ------------ | ------------ |
+| < 10M records | 4 vCPU, 16GB  | 8 vCPU, 32GB   | 2 vCPU, 4GB  | 2 vCPU, 4GB  |
+| 10M - 100M    | 8 vCPU, 32GB  | 16 vCPU, 64GB  | 4 vCPU, 8GB  | 4 vCPU, 8GB  |
+| > 100M        | 16 vCPU, 64GB | 32 vCPU, 128GB | 8 vCPU, 16GB | 8 vCPU, 16GB |
 
 ### Production Checklist
 
@@ -602,12 +606,12 @@ make clean              # Remove all containers and volumes
 
 ### Service URLs
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Neo4j Browser | http://localhost:7474 | neo4j/password123 |
-| ClickHouse HTTP | http://localhost:8123 | default/(empty) |
-| CDC Bridge Health | http://localhost:8000/health | - |
-| CDC Bridge Metrics | http://localhost:8000/metrics | - |
+| Service            | URL                           | Credentials       |
+| ------------------ | ----------------------------- | ----------------- |
+| Neo4j Browser      | http://localhost:7474         | neo4j/password123 |
+| ClickHouse HTTP    | http://localhost:8123         | default/(empty)   |
+| CDC Bridge Health  | http://localhost:8000/health  | -                 |
+| CDC Bridge Metrics | http://localhost:8000/metrics | -                 |
 
 ---
 
@@ -687,27 +691,32 @@ This project is provided as-is for educational and commercial use.
 ## Quick Reference
 
 ### Start System
+
 ```bash
 docker-compose up -d
 make install-triggers
 ```
 
 ### Run Tests
+
 ```bash
 cd test-scenarios && python3 run_tests.py
 ```
 
 ### Check Data
+
 ```bash
 make verify-clickhouse
 ```
 
 ### Stop System
+
 ```bash
 docker-compose down
 ```
 
 ### Clean Everything
+
 ```bash
 make clean
 ```

@@ -1,0 +1,19 @@
+{
+  "name": "neo4j-cdc-nodes-source",
+  "config": {
+    "connector.class": "org.neo4j.connectors.kafka.source.Neo4jConnector",
+    "neo4j.uri": "bolt://neo4j:7687",
+    "neo4j.authentication.basic.username": "neo4j",
+    "neo4j.authentication.basic.password": "password123",
+    "neo4j.source-strategy": "CDC",
+    "neo4j.cdc.poll-interval": "1s",
+    "neo4j.cdc.topic.neo4j-cdc-nodes.patterns.0.pattern": "()",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": false,
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": false,
+    "errors.tolerance": "all",
+    "errors.log.enable": true,
+    "errors.log.include.messages": true
+  }
+}

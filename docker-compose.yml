@@ -49,7 +49,7 @@ services:
 
   # Neo4j Database
   neo4j:
-    image: neo4j:5.26.0
+    image: neo4j:5.26.0-enterprise
     hostname: neo4j
     container_name: neo4j-cdc-neo4j
     ports:
@@ -57,11 +57,11 @@ services:
       - "7687:7687"
     environment:
       NEO4J_AUTH: neo4j/password123
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: 'yes'
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_apoc_export_file_enabled: 'true'
       NEO4J_apoc_import_file_enabled: 'true'
       NEO4J_apoc_import_file_use__neo4j__config: 'true'
-      NEO4J_apoc_trigger_enabled: 'true'
       NEO4J_dbms_security_procedures_unrestricted: 'apoc.*'
       NEO4J_dbms_security_procedures_allowlist: 'apoc.*'
       NEO4J_server_memory_heap_initial__size: '512m'
@@ -82,7 +82,7 @@ services:
 
   # ClickHouse Database
   clickhouse:
-    image: clickhouse/clickhouse-server:25.10
+    image: clickhouse/clickhouse-server:25.12
     hostname: clickhouse
     container_name: neo4j-cdc-clickhouse
     ports:
@@ -108,32 +108,131 @@ services:
         soft: 262144
         hard: 262144
 
-  # CDC Bridge Service (Neo4j -> Kafka)
-  cdc-bridge:
+  # Enable CDC on the Neo4j database (runs once then exits)
+  neo4j-cdc-init:
+    image: neo4j:5.26.0-enterprise
+    container_name: neo4j-cdc-init
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: 'yes'
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Enabling CDC (tx log enrichment) on neo4j database..."
+        cypher-shell -a bolt://neo4j:7687 -u neo4j -p password123 -d system \
+          "ALTER DATABASE neo4j SET OPTION txLogEnrichment 'FULL';"
+        echo "[OK] CDC enabled on neo4j database"
+    networks:
+      - cdc-network
+
+  # Kafka Connect with Neo4j CDC Source Connector
+  kafka-connect:
     build:
-      context: ./cdc-bridge
+      context: ./kafka-connect
       dockerfile: Dockerfile
-    container_name: neo4j-cdc-bridge
+    hostname: kafka-connect
+    container_name: neo4j-cdc-kafka-connect
     depends_on:
       kafka:
         condition: service_healthy
       neo4j:
         condition: service_healthy
+      neo4j-cdc-init:
+        condition: service_completed_successfully
     ports:
-      - "8000:8000"
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_PORT: 8083
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_GROUP_ID: neo4j-cdc-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+    volumes:
+      - ./kafka-connect:/etc/kafka-connect/configs
+    networks:
+      - cdc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # Connector registration (runs once then exits)
+  register-connectors:
+    image: curlimages/curl:latest
+    container_name: neo4j-cdc-register-connectors
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    volumes:
+      - ./kafka-connect:/configs
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Registering neo4j-cdc-nodes-source connector..."
+        curl -sf -X POST http://kafka-connect:8083/connectors \
+          -H "Content-Type: application/json" \
+          -d @/configs/neo4j-cdc-nodes-source.json
+        echo ""
+        echo "[OK] Nodes connector registered"
+
+        echo "Registering neo4j-cdc-relationships-source connector..."
+        curl -sf -X POST http://kafka-connect:8083/connectors \
+          -H "Content-Type: application/json" \
+          -d @/configs/neo4j-cdc-relationships-source.json
+        echo ""
+        echo "[OK] Relationships connector registered"
+
+        echo "Waiting for connectors to start..."
+        sleep 5
+
+        echo "Connector status:"
+        curl -sf http://kafka-connect:8083/connectors/neo4j-cdc-nodes-source/status
+        echo ""
+        curl -sf http://kafka-connect:8083/connectors/neo4j-cdc-relationships-source/status
+        echo ""
+        echo "Registration complete."
+    networks:
+      - cdc-network
+
+  # Test runner (runs tests then exits)
+  test-runner:
+    build:
+      context: ./test-scenarios
+      dockerfile: Dockerfile
+    container_name: neo4j-cdc-test-runner
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      kafka-connect:
+        condition: service_healthy
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: password123
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_TOPIC_NODES: neo4j.nodes
-      KAFKA_TOPIC_RELATIONSHIPS: neo4j.relationships
-      LOG_LEVEL: INFO
-    env_file:
-      - .env
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DATABASE: cdc
     networks:
       - cdc-network
-    restart: unless-stopped
+    profiles:
+      - test
 
 networks:
   cdc-network:
