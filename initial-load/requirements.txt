@@ -1,0 +1,12 @@
+# Requirements for Initial Load Scripts
+# Install: pip3 install -r requirements.txt
+
+# ClickHouse Python client
+clickhouse-connect>=0.11.0
+
+# Data processing
+pandas>=2.2.0,<3.0.0
+
+# For Parquet support (optional, if using Parquet exports)
+pyarrow>=18.0.0
+fastparquet>=2024.11.0

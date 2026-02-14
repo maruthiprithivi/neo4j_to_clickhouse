@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <console>true</console>
+    </logger>
+    
+    <!-- Listen on all interfaces -->
+    <listen_host>::</listen_host>
+    
+    <!-- Kafka settings -->
+    <kafka>
+        <auto_offset_reset>earliest</auto_offset_reset>
+        <enable_auto_commit>true</enable_auto_commit>
+    </kafka>
+    
+    <!-- Allow experimental features -->
+    <allow_experimental_json_type>1</allow_experimental_json_type>
+</clickhouse>

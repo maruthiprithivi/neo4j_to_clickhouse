@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Docker
+docker/
+
+# Claude AI
+.claude/
+CLAUDE.md
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Neo4j
+neo4j/import/*
+neo4j/plugins/*
+!neo4j/import/.gitkeep
+!neo4j/plugins/.gitkeep
+
+# Staging data (CSV exports)
+initial-load/staging/nodes/*.csv
+initial-load/staging/relationships/*.csv
+
+# Python virtual environments
+test-scenarios/.venv/
