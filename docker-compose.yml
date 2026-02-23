@@ -1,0 +1,172 @@
+services:
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    hostname: zookeeper
+    container_name: neo4j-cdc-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - cdc-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka broker
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka
+    container_name: neo4j-cdc-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+    networks:
+      - cdc-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Neo4j database
+  neo4j:
+    image: neo4j:5.23
+    hostname: neo4j
+    container_name: neo4j-cdc-source
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/password123
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_dbms_memory_heap_max__size=1G
+      - NEO4J_server_config_strict__validation_enabled=false
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    networks:
+      - cdc-network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password123", "RETURN 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ClickHouse database
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.10
+    hostname: clickhouse
+    container_name: neo4j-cdc-clickhouse
+    ports:
+      - "8124:8123"  # HTTP
+      - "9001:9000"  # Native
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=clickhouse123
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./sql:/sql
+    networks:
+      - cdc-network
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ClickHouse Consumer (Kafka → ClickHouse)
+  consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    container_name: neo4j-cdc-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:29092
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=clickhouse123
+      - CLICKHOUSE_DATABASE=neo4j_cdc
+      - BATCH_SIZE=100
+      - BATCH_TIMEOUT=5
+    volumes:
+      - ./consumer:/app
+    networks:
+      - cdc-network
+    restart: unless-stopped
+
+  # Kafka UI for monitoring
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: neo4j-cdc-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - cdc-network
+
+  # Python producer for testing
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: neo4j-cdc-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password123
+      - KAFKA_BROKER=kafka:29092
+    volumes:
+      - ./producer:/app
+    networks:
+      - cdc-network
+    command: tail -f /dev/null
+
+networks:
+  cdc-network:
+    driver: bridge
+
+volumes:
+  neo4j-data:
+  neo4j-logs:
+  clickhouse-data:

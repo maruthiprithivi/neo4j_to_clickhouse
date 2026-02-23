@@ -1,0 +1,28 @@
+{
+  "name": "clickhouse-nodes-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "neo4j.nodes",
+    "connection.url": "jdbc:clickhouse://clickhouse:8123/neo4j_cdc",
+    "connection.user": "default",
+    "connection.password": "clickhouse123",
+    "auto.create": "false",
+    "auto.evolve": "false",
+    "insert.mode": "insert",
+    "table.name.format": "node_changes",
+    "pk.mode": "none",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "transforms": "TimestampConverter",
+    "transforms.TimestampConverter.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.TimestampConverter.field": "timestamp",
+    "transforms.TimestampConverter.format": "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
+    "transforms.TimestampConverter.target.type": "Timestamp",
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true"
+  }
+}

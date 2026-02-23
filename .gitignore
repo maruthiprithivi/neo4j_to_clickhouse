@@ -1,0 +1,99 @@
+# Build artifacts and dependencies
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Docker volumes and data
+clickhouse-data/
+neo4j-data/
+neo4j-logs/
+*.log
+
+# Environment and secrets
+.env
+.env.local
+*.pem
+*.key
+ngrok.yml
+*authtoken*
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Generated files
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+Thumbs.db
+.Trash-*
+
+# Node modules (if any)
+node_modules/
+
+# Test coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Docker
+.dockerignore
+
+# Kafka and ClickHouse data
+/data/
+kafka-logs/
+zookeeper/
+
+# Documentation build
+_build/
+docs/_build/
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+
+# Backup files
+*.bak
+*.backup
+*.old
